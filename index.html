@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ShardanApp – FC Shardana</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png"><link rel="icon" href="icon-192.png"><meta name="theme-color" content="#0b6e4f"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="ShardanApp">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f3f5f7;--card:#fff;--tx:#14213d;--mu:#6b7280;--pr:#0b6e4f;--ok:#15803d;--ko:#c2410c;--as:#6b7280;--bd:#e2e5e9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1621;--card:#182230;--tx:#e8edf3;--mu:#9aa6b5;--pr:#34d399;--ok:#4ade80;--ko:#fb923c;--as:#9aa6b5;--bd:#2a3646}}
+:root[data-theme="dark"]{--bg:#0e1621;--card:#182230;--tx:#e8edf3;--mu:#9aa6b5;--pr:#34d399;--ok:#4ade80;--ko:#fb923c;--as:#9aa6b5;--bd:#2a3646}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:76px}
+header{padding:16px 16px 4px}h1{margin:0;font-size:22px}
+main{padding:8px 16px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:10px 0}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mu{color:var(--mu);font-size:13px}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;background:var(--pr);color:var(--bg);font-size:12px;font-weight:600}
+button,input,select{font:inherit;color:inherit}
+button{border:1px solid var(--bd);background:var(--card);border-radius:10px;padding:10px 12px;cursor:pointer}
+.pri{background:var(--pr);color:var(--bg);border-color:var(--pr);font-weight:600;width:100%}
+.dng{color:var(--ko);border-color:var(--ko)}
+input,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);margin:4px 0 8px}
+label{font-size:13px;color:var(--mu)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+nav button{flex:1;border:0;background:none;font-size:13px;padding:10px 4px}
+nav button.on{color:var(--pr);font-weight:700}
+.seg{display:flex;gap:4px;margin-top:6px}
+.seg button{flex:1;padding:8px 2px;font-size:13px}
+.seg .s-pagato.on{background:var(--ok);color:#fff;border-color:var(--ok)}
+.seg .s-da_pagare.on{background:var(--ko);color:#fff;border-color:var(--ko)}
+.seg .s-assente.on{background:var(--as);color:#fff;border-color:var(--as)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.big{font-size:22px;font-weight:700}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:6px 4px;border-bottom:1px solid var(--bd);text-align:left;font-size:14px}
+</style></head><body>
+<header><h1>⚽ ShardanApp</h1><div class="mu">FC Shardana · gestione quote</div></header>
+<main id="app"></main>
+<nav id="nav"></nav>
+<script>
+const TYPES=['Iscrizione','Allenamento','Partita','Straordinario'];
+const ST={pagato:'Pagato',da_pagare:'Da pagare',assente:'Assente'};
+let S={players:[],quotes:[],st:{},log:[]};
+try{const r=localStorage.getItem('qs');if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const act=()=>S.players.filter(p=>!p.arch);
+const tm=t=>new Date(t).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+function lg(q,p,from,to){S.log.push({t:new Date().toISOString(),pid:p?p.id:null,pn:p?p.name:'',qid:q.id,qt:q.type,qd:q.date,qa:q.amount,from,to})}
+const save=()=>{try{localStorage.setItem('qs',JSON.stringify(S))}catch(e){}};
+let tab='quote',open=null,form=false,armed=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const eur=n=>n.toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+const dt=d=>new Date(d+'T00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});
+const get=(q,p)=>(S.st[q]&&S.st[q][p])||'da_pagare';
+function stats(q){let pa=0,da=0,as=0;act().forEach(p=>{const v=get(q.id,p.id);v=='pagato'?pa++:v=='assente'?as++:da++});return{pa,da,as,inc:pa*q.amount,due:da*q.amount}}
+function owed(pid){return S.quotes.reduce((s,q)=>s+(get(q.id,pid)=='da_pagare'?q.amount:0),0)}
+function paid(pid){return S.quotes.reduce((s,q)=>s+(get(q.id,pid)=='pagato'?q.amount:0),0)}
+
+function vQuote(){
+ if(form)return `<div class="card"><label>Tipo</label><select id="f-t">${TYPES.map(t=>`<option>${t}</option>`).join('')}</select>
+ <label>Data</label><input id="f-d" type="date" value="${new Date().toISOString().slice(0,10)}">
+ <label>Importo per giocatore (€)</label><input id="f-a" type="number" inputmode="decimal" min="0" step="0.5">
+ <label>Nota (facoltativa)</label><input id="f-n" placeholder="es. campo, arbitro…">
+ <button class="pri" data-a="saveq">Crea quota</button><button style="width:100%;margin-top:8px" data-a="cancel">Annulla</button></div>`;
+ if(open){const q=S.quotes.find(x=>x.id==open);if(!q){open=null;return vQuote()}const s=stats(q);
+  return `<button data-a="back">← Indietro</button>
+  <div class="card"><div class="row"><span class="badge">${q.type}</span><b>${eur(q.amount)}</b></div>
+  <div class="mu">${dt(q.date)}${q.note?' · '+esc(q.note):''}</div>
+  <div class="mu">Incassato ${eur(s.inc)} · Da incassare ${eur(s.due)} · Assenti ${s.as}</div></div>
+  ${act().length?act().map(p=>{const v=get(q.id,p.id);return `<div class="card"><b>${esc(p.name)}</b><div class="seg">${Object.keys(ST).map(k=>`<button class="s-${k} ${v==k?'on':''}" data-a="st" data-q="${q.id}" data-p="${p.id}" data-v="${k}">${ST[k]}</button>`).join('')}</div></div>`}).join(''):'<p class="mu">Aggiungi prima i giocatori nella scheda Giocatori.</p>'}
+  <button class="dng" style="width:100%" data-a="delq" data-id="${q.id}">${armed=='q'+q.id?'Tocca ancora per eliminare':'Elimina quota'}</button>`}
+ const list=[...S.quotes].sort((a,b)=>b.date.localeCompare(a.date));
+ return `<button class="pri" data-a="newq">+ Nuova quota</button>`+(list.length?list.map(q=>{const s=stats(q);return `<div class="card" data-a="open" data-id="${q.id}" style="cursor:pointer"><div class="row"><span class="badge">${q.type}</span><b>${eur(q.amount)}</b></div><div class="mu">${dt(q.date)}${q.note?' · '+esc(q.note):''}</div><div class="row" style="margin-top:6px"><span>✅ ${s.pa}</span><span>⏳ ${s.da}</span><span>➖ ${s.as}</span><span class="mu">incassato ${eur(s.inc)}</span></div></div>`}).join(''):'<p class="mu">Nessuna quota. Creane una per iniziare.</p>');
+}
+function vPlayers(){
+ return `<div class="card"><label>Nuovo giocatore</label><input id="np" placeholder="Nome e cognome"><button class="pri" data-a="addp">Aggiungi</button></div>`+
+ (act().length?[...act()].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<div class="card"><div class="row"><b>${esc(p.name)}</b><button class="dng" data-a="delp" data-id="${p.id}">${armed=='p'+p.id?'Conferma':'Archivia'}</button></div><div class="mu">Pagato ${eur(paid(p.id))} · Da pagare <b style="color:var(--ko)">${eur(owed(p.id))}</b></div></div>`).join(''):'<p class="mu">Nessun giocatore inserito.</p>');
+}
+function summary(){
+ const inc=S.quotes.reduce((s,q)=>s+stats(q).inc,0),due=S.quotes.reduce((s,q)=>s+stats(q).due,0);
+ const byT=TYPES.map(t=>{const qs=S.quotes.filter(q=>q.type==t);return{t,n:qs.length,inc:qs.reduce((s,q)=>s+stats(q).inc,0),due:qs.reduce((s,q)=>s+stats(q).due,0)}});
+ const arr=act().map(p=>({n:p.name,d:owed(p.id)})).filter(x=>x.d>0).sort((a,b)=>b.d-a.d);
+ return{inc,due,byT,arr};
+}
+function vSum(){
+ const s=summary();
+ return `<div class="grid"><div class="card"><div class="mu">Incassato</div><div class="big" style="color:var(--ok)">${eur(s.inc)}</div></div><div class="card"><div class="mu">Da incassare</div><div class="big" style="color:var(--ko)">${eur(s.due)}</div></div></div>
+ <div class="card tw"><b>Per tipo di quota</b><table><tr><th>Tipo</th><th>N.</th><th>Incassato</th><th>Da inc.</th></tr>${s.byT.map(r=>`<tr><td>${r.t}</td><td>${r.n}</td><td>${eur(r.inc)}</td><td>${eur(r.due)}</td></tr>`).join('')}</table></div>
+ <div class="card"><b>Giocatori in arretrato</b>${s.arr.length?s.arr.map(x=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--bd)"><span>${esc(x.n)}</span><b style="color:var(--ko)">${eur(x.d)}</b></div>`).join(''):'<p class="mu">Nessun arretrato 🎉</p>'}</div>
+ <button class="pri" data-a="copy">Copia riepilogo</button><p id="msg" class="mu"></p>
+ <div class="card"><b>Backup dati</b><p class="mu">I dati sono salvati su questo telefono. Copia il backup e conservalo (es. messaggio a te stesso); per ripristinarlo incollalo qui sotto.</p><button style="width:100%" data-a="bk">Copia backup</button><textarea id="bk" rows="3" style="width:100%;margin-top:8px" placeholder="Incolla qui il backup"></textarea><button style="width:100%;margin-top:8px" data-a="rs">Ripristina da backup</button><p id="msg2" class="mu"></p></div>`;
+}
+let flt='';
+const LB={pagato:'Pagato',da_pagare:'Da pagare',assente:'Assente'};
+function vHist(){
+ const names=[...new Set(S.log.map(l=>l.pn).filter(Boolean))].sort();
+ const L=[...S.log].reverse().filter(l=>!flt||l.pn==flt);
+ return `<div class="card"><label>Filtra per giocatore</label><select id="flt"><option value="">Tutti</option>${names.map(n=>`<option ${n==flt?'selected':''}>${esc(n)}</option>`).join('')}</select><div class="mu">${L.length} movimenti registrati</div></div>`+
+ (L.length?L.map(l=>`<div class="card"><div class="row"><b>${l.pn?esc(l.pn):'—'}</b><span class="mu">${tm(l.t)}</span></div><div>${l.qt} del ${dt(l.qd)} · ${eur(l.qa)}</div><div class="mu">${l.pn?`${LB[l.from]||l.from} → <b style="color:${l.to=='pagato'?'var(--ok)':'var(--tx)'}">${LB[l.to]||l.to}</b>`:esc(l.to)}</div></div>`).join(''):'<p class="mu">Lo storico si popola a ogni variazione di stato.</p>');
+}
+function render(){
+ $('#app').innerHTML=tab=='quote'?vQuote():tab=='giocatori'?vPlayers():tab=='storico'?vHist():vSum();
+ $('#nav').innerHTML=[['quote','💶 Quote'],['giocatori','👥 Giocatori'],['storico','🕓 Storico'],['riepilogo','📊 Riepilogo']].map(([k,l])=>`<button class="${tab==k?'on':''}" data-a="tab" data-t="${k}">${l}</button>`).join('');
+}
+document.addEventListener('change',e=>{if(e.target.id=='flt'){flt=e.target.value;render()}});
+document.addEventListener('click',e=>{
+ const el=e.target.closest('[data-a]');if(!el)return;const a=el.dataset.a,d=el.dataset;
+ if(a=='tab'){tab=d.t;open=null;form=false;armed=null}
+ else if(a=='newq')form=true;
+ else if(a=='cancel')form=false;
+ else if(a=='back'){open=null;armed=null}
+ else if(a=='open')open=d.id;
+ else if(a=='saveq'){const amt=parseFloat($('#f-a').value.replace(',','.'));if(!(amt>=0)||$('#f-a').value===''){$('#f-a').focus();return}
+  const q={id:uid(),type:$('#f-t').value,date:$('#f-d').value,amount:amt,note:$('#f-n').value.trim()};S.quotes.push(q);save();form=false;open=q.id}
+ else if(a=='st'){const q=S.quotes.find(x=>x.id==d.q),p=S.players.find(x=>x.id==d.p),f=get(d.q,d.p);if(f!=d.v){lg(q,p,f,d.v);(S.st[d.q]=S.st[d.q]||{})[d.p]=d.v;save()}}
+ else if(a=='delq'){if(armed=='q'+d.id){const q0=S.quotes.find(q=>q.id==d.id);lg(q0,null,'','quota eliminata');S.quotes=S.quotes.filter(q=>q.id!=d.id);delete S.st[d.id];save();open=null;armed=null}else armed='q'+d.id}
+ else if(a=='addp'){const n=$('#np').value.trim();if(!n)return;const p={id:uid(),name:n};S.players.push(p);S.quotes.forEach(q=>{(S.st[q.id]=S.st[q.id]||{})[p.id]='assente'});save()}
+ else if(a=='delp'){if(armed=='p'+d.id){const p0=S.players.find(p=>p.id==d.id);if(p0)p0.arch=true;save();armed=null}else armed='p'+d.id}
+ else if(a=='bk'){(navigator.clipboard?navigator.clipboard.writeText(JSON.stringify(S)):Promise.reject()).then(()=>{$('#msg2').textContent='Backup copiato.'}).catch(()=>{$('#msg2').textContent='Copia non disponibile.'});return}
+ else if(a=='rs'){try{const o=JSON.parse($('#bk').value);if(!o.players||!o.quotes)throw 0;S=Object.assign({players:[],quotes:[],st:{},log:[]},o);save()}catch(x){$('#msg2').textContent='Backup non valido.';return}}
+ else if(a=='copy'){const s=summary();const t=`Riepilogo quote\nIncassato: ${eur(s.inc)}\nDa incassare: ${eur(s.due)}\n\nArretrati:\n`+(s.arr.map(x=>`- ${x.n}: ${eur(x.d)}`).join('\n')||'nessuno');
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{$('#msg').textContent='Copiato negli appunti.'}).catch(()=>{$('#msg').textContent='Copia non disponibile su questo dispositivo.'});return}
+ render();
+});
+render();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+</script></body></html>
